@@ -2,6 +2,7 @@
 import { GetStaticPaths, GetStaticProps } from 'next';
 import Prismic from '@prismicio/client';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 
 import { FiCalendar, FiUser, FiClock } from 'react-icons/fi';
 
@@ -20,7 +21,7 @@ interface Post {
   data: {
     title: string;
     banner: {
-      url: string;
+      url: string | null;
     };
     author: string;
     content: {
@@ -37,23 +38,36 @@ interface PostProps {
 }
 
 export default function Post({ post }: PostProps): JSX.Element {
-  // console.log(post.data.content);
+  const router = useRouter();
+  const readingTime = 8 / 2;
+  const formatedDate = format(
+    new Date(post.first_publication_date),
+    'dd MMM yyyy',
+    {
+      locale: ptBR,
+    }
+  );
+
+  if (router.isFallback) {
+    return <div>Carregando...</div>;
+  }
+
   return (
     <>
       <Head>
-        <title>Home | {post.data.title}</title>
+        <title>Post | {post.data.title}</title>
       </Head>
       <Header />
       <main className={styles.container}>
         <article>
-          <img src="/Banner.png" alt="banner" />
+          <img src={post.data.banner.url} alt={post.data.title} />
 
           <div className={`${commonStyles.size} ${styles.content}`}>
             <h1>{post.data.title}</h1>
             <div className={styles.postInfo}>
               <div>
                 <FiCalendar />
-                <span>{post.first_publication_date}</span>
+                <span>{formatedDate}</span>
               </div>
               <div>
                 <FiUser />
@@ -61,16 +75,20 @@ export default function Post({ post }: PostProps): JSX.Element {
               </div>
               <div>
                 <FiClock />
-                <span>4 min</span>
+                <span>{readingTime} min</span>
               </div>
             </div>
 
             {post.data.content.map(section => {
               return (
-                <>
+                <section key={section.heading}>
                   <h1>{section.heading}</h1>
-                  <div dangerouslySetInnerHTML={{ __html: section.body }} />
-                </>
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: RichText.asHtml(section.body),
+                    }}
+                  />
+                </section>
               );
             })}
           </div>
@@ -83,14 +101,23 @@ export default function Post({ post }: PostProps): JSX.Element {
 export const getStaticPaths: GetStaticPaths = async () => {
   const prismic = getPrismicClient();
   const posts = await prismic.query(
-    Prismic.Predicates.at('document.type', 'post')
+    Prismic.Predicates.at('document.type', 'post'),
+    {
+      pageSize: 2,
+    }
   );
 
-  // const pathsList = posts.results.map(post => post.slugs);
+  const paths = await posts.results.map(post => {
+    return {
+      params: {
+        slug: post.uid,
+      },
+    };
+  });
 
   return {
-    paths: [],
-    fallback: 'blocking',
+    paths,
+    fallback: true,
   };
 };
 
@@ -101,30 +128,21 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
   const response = await prismic.getByUID('post', String(slug), {});
 
   const post = {
-    slug,
-    first_publication_date: format(
-      new Date(response.first_publication_date),
-      'dd MMM yyyy',
-      {
-        locale: ptBR,
-      }
-    ),
+    uid: response.uid,
+    first_publication_date: response.first_publication_date,
     data: {
       title: response.data.title,
-      banner: {
-        url: response.data.banner,
-      },
+      subtitle: response.data.subtitle,
       author: response.data.author,
+      banner: response.data.banner,
       content: response.data.content.map(section => {
         return {
           heading: section.heading,
-          body: RichText.asHtml(section.body),
+          body: section.body,
         };
       }),
     },
   };
-
-  console.log(JSON.stringify(post, null, 2));
 
   return {
     props: { post },

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { FiCalendar, FiUser } from 'react-icons/fi';
 import format from 'date-fns/format';
 import ptBR from 'date-fns/locale/pt-BR';
+import { useState } from 'react';
 import Header from '../components/Header/index';
 import { getPrismicClient } from '../services/prismic';
 
@@ -31,10 +32,24 @@ interface HomeProps {
   postsPagination: PostPagination;
 }
 
-export default function Home({
-  next_page,
-  results,
-}: PostPagination): JSX.Element {
+export default function Home({ postsPagination }: HomeProps): JSX.Element {
+  // console.log(postsPagination.next_page);
+  const [nextPageAvailable, setNextPageAvailable] = useState<string | null>(
+    postsPagination.next_page
+  );
+
+  const [availablePosts, setAvailablePosts] = useState<Post[]>([
+    ...postsPagination.results,
+  ]);
+
+  async function handleMorePosts(): Promise<void> {
+    const response = await fetch(nextPageAvailable);
+    const { next_page, results } = await response.json();
+
+    setNextPageAvailable(next_page);
+    setAvailablePosts([...availablePosts, ...results]);
+  }
+
   return (
     <>
       <Head>
@@ -43,38 +58,43 @@ export default function Home({
       <Header />
       <main className={`${commonStyles.size} ${styles.container}`}>
         <div className={styles.posts}>
-          {results.map(post => {
-            return (
-              <Link key={post.uid} href={`/post/${post.uid}`}>
-                <a>
-                  <h1>{post.data.title}</h1>
-                  <p>{post.data.subtitle}</p>
-                  <div className={styles.postInfo}>
-                    <div>
-                      <FiCalendar />
-                      <span>
-                        {format(
-                          new Date(post.first_publication_date),
-                          'dd MMM yyyy',
-                          {
-                            locale: ptBR,
-                          }
-                        )}
-                      </span>
+          {availablePosts &&
+            availablePosts.map(post => {
+              return (
+                <Link key={post.uid} href={`/post/${post.uid}`}>
+                  <a>
+                    <h1>{post.data.title}</h1>
+                    <p>{post.data.subtitle}</p>
+                    <div className={styles.postInfo}>
+                      <div>
+                        <FiCalendar />
+                        <span>
+                          {format(
+                            new Date(post.first_publication_date),
+                            'dd MMM yyyy',
+                            {
+                              locale: ptBR,
+                            }
+                          )}
+                        </span>
+                      </div>
+                      <div>
+                        <FiUser />
+                        <span>{post.data.author}</span>
+                      </div>
                     </div>
-                    <div>
-                      <FiUser />
-                      <span>{post.data.author}</span>
-                    </div>
-                  </div>
-                </a>
-              </Link>
-            );
-          })}
+                  </a>
+                </Link>
+              );
+            })}
         </div>
 
-        {next_page && (
-          <button className={styles.loadButton} type="button">
+        {nextPageAvailable && (
+          <button
+            className={styles.loadButton}
+            type="button"
+            onClick={handleMorePosts}
+          >
             Carregar mais posts
           </button>
         )}
@@ -86,12 +106,26 @@ export default function Home({
 export const getStaticProps: GetStaticProps = async context => {
   const prismic = getPrismicClient();
   const postsResponse = await prismic.query(
-    Prismic.Predicates.at('document.type', 'post')
+    Prismic.Predicates.at('document.type', 'post'),
+    { pageSize: 2 }
   );
 
-  const { results, next_page } = postsResponse;
+  const postsPagination = {
+    next_page: postsResponse.next_page,
+    results: postsResponse.results.map(result => {
+      return {
+        uid: result.uid,
+        first_publication_date: result.first_publication_date,
+        data: {
+          title: result.data.title,
+          subtitle: result.data.subtitle,
+          author: result.data.author,
+        },
+      };
+    }),
+  };
 
   return {
-    props: { results, next_page },
+    props: { postsPagination },
   };
 };
