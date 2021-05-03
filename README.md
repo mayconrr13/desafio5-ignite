@@ -31,11 +31,13 @@
 
 ### Screenshots
 ---
-* Mobile
+
+###### Mobile
 ![](/public/spacemobile.gif)
 
 
-* Web
+
+###### Web
 ![](/public/spaceweb.gif)
 
 ### Como instalar
