@@ -117,7 +117,9 @@ export default function Post({
                 <span>{readingTime} min</span>
               </div>
             </div>
-            <span>{formatedLastPublicationDate}</span>
+            {post.first_publication_date !== post.last_publication_date && (
+              <span>{formatedLastPublicationDate}</span>
+            )}
 
             {post.data.content.map(section => {
               return (
